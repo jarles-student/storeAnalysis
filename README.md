@@ -6,7 +6,7 @@ Pakiet R do analizy, wizualizacji i prognozowania szereg√≥w czasowych w sprzeda≈
 
 ```R
 # install.packages("devtools")
-devtools::install_github("TwojaNazwaUzytkownika/storeAnalysis")
+devtools::install_github("jarles-student/storeAnalysis")
 ```
 
 ## Example
