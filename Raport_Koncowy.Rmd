@@ -1,0 +1,132 @@
+---
+title: "Raport Analityczny: Analiza Szeregów Czasowych Sprzedaży"
+author: "Jarosław Leśny, 453276; Hubert Dobrzyński, 452176"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+# Konfiguracja globalna raportu - ukrywamy ostrzeżenia i komunikaty
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+## 1. Cel Raportu i Kontekst Biznesowy
+
+Niniejszy raport przedstawia analizę szeregów czasowych na podstawie danych sprzedażowych sieci detalicznej. Wykorzystano w nim autorski pakiet `storeAnalysis`. 
+
+**Ważna uwaga metodologiczna:** Analizowana zmienna `sales` określa **fizyczny wolumen sprzedaży** (liczbę sprzedanych sztuk towaru lub zważonych kilogramów, stąd obecność wartości ułamkowych w danych), a nie przychód w walucie. Jest to kluczowe dla optymalizacji łańcucha dostaw i planowania zapasów magazynowych.
+
+## 2. Przygotowanie Danych
+
+W pierwszej kolejności wczytujemy dane, weryfikujemy ich jakość i agregujemy do poziomu dziennego.
+
+```{r data_prep}
+library(storeAnalysis)
+
+# Wczytanie danych z plików CSV wraz z kalendarzem świąt
+prawdziwe_dane <- load_sales_data(
+  train_path = "train.csv", 
+  stores_path = "stores.csv",
+  holidays_path = "holidays_events.csv"
+)
+
+# Walidacja i czyszczenie
+validate_sales_ts(prawdziwe_dane)
+czyste_dane <- clean_sales_ts(prawdziwe_dane, aggregate_by = "day")
+```
+
+## 3. Kluczowe Metryki Biznesowe
+
+Obliczamy podstawowe metryki opisujące przepływ towarów w analizowanym okresie.
+
+```{r metrics}
+metryki <- compute_sales_metrics(czyste_dane)
+knitr::kable(metryki, caption = "Główne Metryki Sprzedażowe (Wolumen)")
+```
+
+* **Wniosek:** Przez system przeszło ponad miliard jednostek towaru. Skuteczność działań marketingowych jest wyraźna – promowanych było blisko 7,8 mln jednostek. Odstęp pomiędzy największymi szczytami zakupowymi (pikami) wynosi średnio około 6.3 dnia, co wskazuje na mocną, cotygodniową sezonowość (np. wzmożone zakupy weekendowe).
+
+## 4. Podsumowanie dla Menedżera (Ostatnie 7 dni)
+
+Analizujemy ekstrema w naszej sieci, rankingi placówek oraz asortymentu. To kluczowe dane do optymalizacji łańcucha dostaw i alokacji miejsca na magazynach.
+
+```{r summary}
+podsumowanie <- create_management_summary(czyste_dane)
+```
+
+### 4.1. Dynamika Sprzedaży (Ostatnie 7 dni)
+* **Średni dzienny wolumen sieci:** `r format(round(podsumowanie$Last_7_Days_Avg_Sales, 0), big.mark=" ")` jednostek.
+* **Najszybciej rosnąca kategoria:** `r podsumowanie$Fastest_Growing_Category`.
+* **Największy spadek w ostatnim okresie:** `r podsumowanie$Biggest_Drop_Category`.
+
+### 4.2. Rankingi (TOP 5)
+
+Poniższe wykresy prezentują liderów pod kątem sprzedanych jednostek.
+
+```{r top_plots, fig.show='hold', out.width='50%', fig.height=5, echo=FALSE}
+# Wywołanie gotowej funkcji z naszego pakietu
+plot_top_rankings(podsumowanie)
+```
+
+### 4.3. Strefa Wymagająca Interwencji (BOTTOM 5)
+
+Asortyment i sklepy o najmniejszym obrocie, potencjalnie blokujące zasoby:
+
+**BOTTOM 5 Sklepów:**
+```{r bottom_stores, echo=FALSE}
+knitr::kable(podsumowanie$Bottom_5_Stores, col.names = c("Numer Sklepu", "Wolumen"), format.args = list(big.mark = " "))
+```
+
+**BOTTOM 5 Kategorii:**
+```{r bottom_cat, echo=FALSE}
+knitr::kable(podsumowanie$Bottom_5_Categories, col.names = c("Kategoria", "Wolumen"), format.args = list(big.mark = " "))
+```
+
+## 5. Analiza Produktów i Skuteczności Promocji
+
+Kolejnym etapem audytu operacyjnego jest weryfikacja zachowania poszczególnych linii produktowych oraz ocena rentowności działań marketingowych.
+
+### 5.1. Trendy sprzedażowe głównych produktów
+Poniższy wykres prezentuje linie trendu dla pięciu najmocniejszych kategorii asortymentowych w sieci, co pozwala zidentyfikować długoterminowe zmiany w preferencjach klientów.
+
+```{r category_trends, fig.width=10, fig.height=5, echo=FALSE}
+plot_category_trends(czyste_dane)
+```
+
+### 5.2. Skuteczność Promocji
+Weryfikujemy, czy nakłady na promocję faktycznie znajdują odzwierciedlenie we wzroście fizycznego wolumenu. Linia regresji (przerywana) wskazuje siłę korelacji.
+
+```{r promotion_impact, fig.width=8, fig.height=5, echo=FALSE}
+plot_promotion_impact(czyste_dane)
+```
+* **Wniosek analityczny:** Wykres wyraźnie wskazuje pozytywny trend i skupienie punktów wokół linii regresji. Potwierdza to wysoką skuteczność promocji – zwiększenie liczby jednostek na promocji bezpośrednio stymuluje ruch towarowy i zdejmuje ciężar zalegających zapasów z magazynu.
+
+## 6. Prognozowanie Szeregów Czasowych
+
+Aby zaplanować przyszłe zatowarowanie, wygenerowano prognozy na najbliższe 30 dni wykorzystując dwa niezależne algorytmy: **Prophet** oraz klasyczny model **ARIMA**.
+
+### 6.1. Prognoza modelem Prophet
+
+Model Prophet został zasilony oficjalnym kalendarzem dni wolnych i świąt narodowych. Dzięki temu algorytm poprawnie identyfikuje anomalie i nie traktuje świątecznych szczytów wolumenowych jako trwałej zmiany trendu, co znacząco zwiększa precyzję planowania zapasów.
+
+```{r prophet_forecast, fig.width=10, fig.height=5, echo=FALSE}
+prognoza_prophet <- create_prognosis(czyste_dane, periods = 30, method = "prophet", zoom_days = 150)
+```
+
+### 6.2. Prognoza modelem ARIMA
+
+```{r arima_forecast, fig.width=10, fig.height=5}
+prognoza_arima <- create_prognosis(czyste_dane, periods = 30, method = "arima")
+```
+
+## 7. Końcowe Wnioski Biznesowe i Rekomendacje
+
+Na podstawie przeprowadzonej analizy szeregów czasowych, można sformułować następujące, oparte na twardych danych rekomendacje, kluczowe dla optymalizacji procesów w firmie:
+
+1. **Optymalizacja łańcucha dostaw:** Skupienie się na fizycznym wolumenie sprzedaży ujawnia prawdziwe obciążenie logistyczne. Placówki z czołówki rankingu (TOP 5) wymagają priorytetyzacji w harmonogramach dostaw i zwiększonej przepustowości na zapleczach.
+2. **Efektywne zarządzanie przestrzenią:** Systematyczna analiza najsłabiej rotujących kategorii i placówek (BOTTOM 5) to szansa na uwolnienie zamrożonego kapitału. Wiemy, że nawet małe usprawnienia w zarządzaniu tymi najsłabszymi ogniwami mogą znacząco poprawiać efektywność całych procesów inwentaryzacyjnych.
+3. **Promocje jako dźwignia operacyjna:** Udowodniona silna korelacja między promocją a wolumenem oznacza, że akcje marketingowe mogą być używane nie tylko do zwiększania przychodów, ale jako precyzyjne narzędzie do szybkiego upłynniania nadwyżek magazynowych.
+4. **Podejmowanie decyzji bez zgadywania:** Wdrożenie modelu predykcyjnego uwzględniającego kalendarz świąt pozwala na precyzyjne sterowanie łańcuchem dostaw, zapobiegając w ten sposób zjawisku braku towaru na półkach przed świętami, jak i kosztownemu przepełnieniu magazynów tuż po nich.

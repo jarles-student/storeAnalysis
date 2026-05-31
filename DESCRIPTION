@@ -1,0 +1,27 @@
+Package: storeAnalysis
+Type: Package
+Title: Analiza i Prognozowanie Szeregów Czasowych Sprzedaży Detalicznej
+Version: 0.1.0
+Authors@R: c(
+    person("Jaroslaw", "Lesny", email = "jlesny@student.uw.edu.pl", role = c("aut", "cre")),
+    person("Hubert", "Dobrzynski", email = "hijtiori75@gmail.com", role = "aut")
+  )
+Description: Pakiet automatyzujący przetwarzanie surowych danych transakcyjnych 
+    do postaci gotowych metryk biznesowych. Zawiera narzędzia do walidacji, 
+    czyszczenia danych, wizualizacji trendów i skuteczności promocji oraz 
+    prognozowania wolumenu z wykorzystaniem modeli ARIMA i Prophet.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Imports: 
+    dplyr,
+    forecast,
+    ggplot2,
+    lubridate,
+    magrittr,
+    prophet,
+    readr,
+    scales,
+    tidyr
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
